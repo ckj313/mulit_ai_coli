@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { URL } from 'node:url';
+import { config as loadDotenv } from 'dotenv';
 import { WebSocketServer } from 'ws';
 
 import { createApp } from './app.js';
@@ -8,6 +9,9 @@ import { loadConfig } from './config.js';
 import { Orchestrator } from './orchestration/orchestrator.js';
 import { RoomStore } from './storage/store.js';
 import { WsHub } from './ws-hub.js';
+
+loadDotenv({ path: '.env.local', override: false });
+loadDotenv();
 
 const config = loadConfig();
 const store = new RoomStore(config.databasePath);

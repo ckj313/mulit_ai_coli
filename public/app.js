@@ -4,11 +4,42 @@ const statusTextEl = document.getElementById('status-text');
 const messageListEl = document.getElementById('message-list');
 const messageFormEl = document.getElementById('message-form');
 const messageInputEl = document.getElementById('message-input');
+const mentionAutocompleteEl = document.getElementById('mention-autocomplete');
 const newRoomBtn = document.getElementById('new-room-btn');
 
 let rooms = [];
 let currentRoomId = null;
 let ws = null;
+
+const AGENT_MENTIONS = [
+  {
+    token: 'claude',
+    label: 'Claude 主架构师',
+    note: '主架构与核心开发',
+    keywords: ['claude', '布偶猫', 'architect'],
+  },
+  {
+    token: 'codex',
+    label: 'Codex 审查官',
+    note: 'Code Review / 安全 / 测试',
+    keywords: ['codex', '缅因猫', 'reviewer'],
+  },
+  {
+    token: 'gemini',
+    label: 'Gemini 设计师',
+    note: '视觉设计与创意',
+    keywords: ['gemini', '暹罗猫', 'designer'],
+  },
+];
+
+const mentionState = {
+  visible: false,
+  start: -1,
+  caret: -1,
+  query: '',
+  selectedIndex: 0,
+  items: [],
+};
 
 function formatRole(message) {
   if (message.senderType === 'user') return '用户';
@@ -23,6 +54,132 @@ function roleClass(message) {
   if (message.senderType === 'user') return 'user';
   if (message.senderType === 'system') return 'system';
   return message.agentId || 'system';
+}
+
+function normalizeSearchText(value) {
+  return value.trim().toLowerCase();
+}
+
+function detectMentionContext() {
+  const caret = messageInputEl.selectionStart ?? messageInputEl.value.length;
+  const before = messageInputEl.value.slice(0, caret);
+  const match = before.match(/(?:^|[\s\n])@([\w\u4e00-\u9fa5-]*)$/u);
+  if (!match) {
+    return null;
+  }
+
+  const query = match[1] || '';
+  return {
+    query,
+    start: caret - query.length - 1,
+    caret,
+  };
+}
+
+function findMentionCandidates(query) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) {
+    return AGENT_MENTIONS.slice();
+  }
+
+  return AGENT_MENTIONS.filter((item) =>
+    item.keywords.some((keyword) => normalizeSearchText(keyword).includes(normalizedQuery)),
+  );
+}
+
+function hideMentionAutocomplete() {
+  mentionState.visible = false;
+  mentionState.items = [];
+  mentionAutocompleteEl.innerHTML = '';
+  mentionAutocompleteEl.classList.add('hidden');
+}
+
+function renderMentionAutocomplete() {
+  if (!mentionState.visible || mentionState.items.length === 0) {
+    hideMentionAutocomplete();
+    return;
+  }
+
+  mentionAutocompleteEl.innerHTML = '';
+
+  mentionState.items.forEach((item, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `mention-item${index === mentionState.selectedIndex ? ' active' : ''}`;
+    button.dataset.index = String(index);
+    button.innerHTML = `<span class="mention-main">@${item.token} · ${item.label}</span><span class="mention-sub">${item.note}</span>`;
+
+    button.addEventListener('mouseenter', () => {
+      mentionState.selectedIndex = index;
+      renderMentionAutocomplete();
+    });
+
+    button.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      insertSelectedMention(index);
+    });
+
+    mentionAutocompleteEl.appendChild(button);
+  });
+
+  mentionAutocompleteEl.classList.remove('hidden');
+}
+
+function updateMentionAutocomplete() {
+  const context = detectMentionContext();
+  if (!context) {
+    hideMentionAutocomplete();
+    return;
+  }
+
+  const candidates = findMentionCandidates(context.query);
+  if (candidates.length === 0) {
+    hideMentionAutocomplete();
+    return;
+  }
+
+  const shouldResetSelection = mentionState.query !== context.query || !mentionState.visible;
+
+  mentionState.visible = true;
+  mentionState.start = context.start;
+  mentionState.caret = context.caret;
+  mentionState.query = context.query;
+  mentionState.items = candidates;
+  if (shouldResetSelection || mentionState.selectedIndex >= candidates.length) {
+    mentionState.selectedIndex = 0;
+  }
+
+  renderMentionAutocomplete();
+}
+
+function insertSelectedMention(index = mentionState.selectedIndex) {
+  const item = mentionState.items[index];
+  if (!item || mentionState.start < 0 || mentionState.caret < 0) {
+    hideMentionAutocomplete();
+    return;
+  }
+
+  const originalText = messageInputEl.value;
+  const before = originalText.slice(0, mentionState.start);
+  const after = originalText.slice(mentionState.caret);
+  const inserted = `@${item.token} `;
+  const nextText = `${before}${inserted}${after}`;
+
+  messageInputEl.value = nextText;
+  const cursor = before.length + inserted.length;
+  messageInputEl.focus();
+  messageInputEl.setSelectionRange(cursor, cursor);
+  hideMentionAutocomplete();
+}
+
+function moveMentionSelection(delta) {
+  if (!mentionState.visible || mentionState.items.length === 0) {
+    return;
+  }
+
+  const total = mentionState.items.length;
+  mentionState.selectedIndex = (mentionState.selectedIndex + delta + total) % total;
+  renderMentionAutocomplete();
 }
 
 function renderRooms() {
@@ -157,6 +314,7 @@ async function loadRooms() {
 
 messageFormEl.addEventListener('submit', async (event) => {
   event.preventDefault();
+  hideMentionAutocomplete();
 
   const content = messageInputEl.value.trim();
   if (!content || !currentRoomId) {
@@ -188,6 +346,60 @@ newRoomBtn.addEventListener('click', async () => {
   rooms = [data.room, ...rooms];
   await openRoom(data.room.id);
   renderRooms();
+});
+
+messageInputEl.addEventListener('input', () => {
+  updateMentionAutocomplete();
+});
+
+messageInputEl.addEventListener('click', () => {
+  updateMentionAutocomplete();
+});
+
+messageInputEl.addEventListener('blur', () => {
+  window.setTimeout(() => {
+    hideMentionAutocomplete();
+  }, 100);
+});
+
+messageInputEl.addEventListener('keydown', (event) => {
+  if (!mentionState.visible) {
+    return;
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    moveMentionSelection(1);
+    return;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    moveMentionSelection(-1);
+    return;
+  }
+
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    event.preventDefault();
+    insertSelectedMention();
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    hideMentionAutocomplete();
+  }
+});
+
+document.addEventListener('mousedown', (event) => {
+  const target = event.target;
+  if (target === messageInputEl) {
+    return;
+  }
+  if (mentionAutocompleteEl.contains(target)) {
+    return;
+  }
+  hideMentionAutocomplete();
 });
 
 loadRooms().catch((error) => {

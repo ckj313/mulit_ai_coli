@@ -20,7 +20,7 @@ export class ClaudeClient implements AgentClient {
       '--tools',
       '',
       '--model',
-      process.env['CLAUDE_MODEL'] ?? 'sonnet',
+      process.env['CLAUDE_MODEL'] ?? 'claude-sonnet-4-5-20250929',
       '--no-session-persistence',
     ];
 

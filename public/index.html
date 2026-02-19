@@ -31,11 +31,14 @@
         <section id="message-list" class="message-list"></section>
 
         <form id="message-form" class="message-form">
-          <textarea
-            id="message-input"
-            placeholder="输入任务，例如：请设计首页，然后 @codex 做安全检查"
-            rows="3"
-          ></textarea>
+          <div class="composer-input-wrap">
+            <textarea
+              id="message-input"
+              placeholder="输入任务，例如：请设计首页，然后 @codex 做安全检查"
+              rows="3"
+            ></textarea>
+            <div id="mention-autocomplete" class="mention-autocomplete hidden"></div>
+          </div>
           <button id="send-btn" type="submit">发送任务</button>
         </form>
       </main>

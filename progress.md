@@ -10,4 +10,5 @@
 - 实现 A2A 路由、默认派发与循环保护
 - 实现前端协作页面（房间管理+消息流）
 - 编写单元测试与接口测试
+- 将 Gemini 通道从 CLI 改为 OpenRouter API（`google/gemini-2.5-flash`）
 - 准备 GitHub 公开仓库推送

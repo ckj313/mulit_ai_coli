@@ -177,6 +177,10 @@ button:hover {
   gap: 12px;
 }
 
+.composer-input-wrap {
+  position: relative;
+}
+
 #message-input {
   border: 1px solid var(--panel-border);
   border-radius: 12px;
@@ -185,6 +189,54 @@ button:hover {
   font: inherit;
   min-height: 88px;
   background: rgba(255, 255, 255, 0.92);
+}
+
+.mention-autocomplete {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 32px rgba(7, 32, 45, 0.12);
+  padding: 6px;
+  z-index: 18;
+  display: grid;
+  gap: 4px;
+}
+
+.mention-item {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background: rgba(0, 138, 102, 0.14);
+}
+
+.mention-main {
+  display: block;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.mention-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.hidden {
+  display: none;
 }
 
 @media (max-width: 900px) {

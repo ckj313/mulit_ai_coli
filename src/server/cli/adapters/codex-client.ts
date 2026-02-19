@@ -12,6 +12,8 @@ export class CodexClient implements AgentClient {
     const args = [
       'exec',
       input.prompt,
+      '--model',
+      process.env['CODEX_MODEL'] ?? 'gpt-5.2',
       '--json',
       '--sandbox',
       process.env['CODEX_SANDBOX'] ?? 'workspace-write',
