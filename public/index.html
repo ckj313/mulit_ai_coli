@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multi AI Coli Room</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h1>AI 协作房间</h1>
+          <button id="new-room-btn" type="button">新建房间</button>
+        </div>
+        <ul id="room-list" class="room-list"></ul>
+      </aside>
+
+      <main class="chat-area">
+        <header class="chat-header">
+          <h2 id="room-title">加载中...</h2>
+          <p id="status-text">状态：初始化</p>
+        </header>
+
+        <section id="message-list" class="message-list"></section>
+
+        <form id="message-form" class="message-form">
+          <textarea
+            id="message-input"
+            placeholder="输入任务，例如：请设计首页，然后 @codex 做安全检查"
+            rows="3"
+          ></textarea>
+          <button id="send-btn" type="submit">发送任务</button>
+        </form>
+      </main>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
