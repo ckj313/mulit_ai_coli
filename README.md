@@ -20,7 +20,7 @@
 ## 模型调用参数
 
 - Claude:
-  - `claude -p <prompt> --output-format stream-json --verbose --permission-mode default --tools "" --model claude-sonnet-4-5-20250929 --no-session-persistence`
+  - `claude -p <prompt> --output-format stream-json --verbose --setting-sources local --disable-slash-commands --permission-mode default --tools "" --model claude-sonnet-4-5-20250929 --no-session-persistence`
 - Codex:
   - `codex exec <prompt> --model gpt-5.2 --json --sandbox workspace-write --skip-git-repo-check --ephemeral`
 - Gemini（OpenRouter）:
