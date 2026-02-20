@@ -96,15 +96,15 @@ describe('Orchestrator', () => {
     expect(agentMessages).toEqual(['claude', 'codex', 'gemini', 'claude']);
   });
 
-  it('Claude 未显式 @ 时默认派发给 Codex 和 Gemini', async () => {
+  it('用户只 @claude 时仅 Claude 响应', async () => {
     const store = new RoomStore(':memory:');
     stores.push(store);
 
-    const room = store.createRoom('default delegates');
+    const room = store.createRoom('mention only');
     const userMessage = store.saveMessage({
       roomId: room.id,
       senderType: 'user',
-      content: '做一个首页方案',
+      content: '@claude 做一个首页方案',
     });
 
     const orchestrator = new Orchestrator({
@@ -125,7 +125,42 @@ describe('Orchestrator', () => {
       .filter((message) => message.senderType === 'agent')
       .map((message) => message.agentId);
 
-    expect(agentMessages).toEqual(['claude', 'codex', 'gemini']);
+    expect(agentMessages).toEqual(['claude']);
+  });
+
+  it('用户 @codex 和 @gemini 时两者都会响应', async () => {
+    const store = new RoomStore(':memory:');
+    stores.push(store);
+
+    const room = store.createRoom('mention two');
+    const userMessage = store.saveMessage({
+      roomId: room.id,
+      senderType: 'user',
+      content: '@codex 先看安全，@gemini 再给UI建议',
+    });
+
+    const orchestrator = new Orchestrator({
+      config: {
+        ...baseConfig,
+        maxA2ADepth: 2,
+      },
+      store,
+      wsHub: new WsHub(),
+      agents: {
+        claude: new FakeAgent('claude', ['unused']),
+        codex: new FakeAgent('codex', ['安全建议']),
+        gemini: new FakeAgent('gemini', ['视觉建议']),
+      },
+    });
+
+    await orchestrator.runForMessage({ roomId: room.id, userMessage });
+
+    const agentMessages = store
+      .listMessages(room.id)
+      .filter((message) => message.senderType === 'agent')
+      .map((message) => message.agentId);
+
+    expect(agentMessages).toEqual(['codex', 'gemini']);
   });
 
   it('循环 @ 会被最大轮次限制截断', async () => {

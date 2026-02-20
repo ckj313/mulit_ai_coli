@@ -4,7 +4,7 @@ import { CliRunError } from '../cli/run-cli.js';
 import { RoomStore } from '../storage/store.js';
 import { WsHub } from '../ws-hub.js';
 import { buildAgentPrompt } from './prompt-builder.js';
-import { defaultDelegatesFor, extractMentions } from './mentions.js';
+import { extractMentions } from './mentions.js';
 
 interface OrchestratorDeps {
   config: AppConfig;
@@ -106,7 +106,8 @@ export class Orchestrator {
   }
 
   private async execute(options: OrchestrationOptions): Promise<void> {
-    const queue: AgentId[] = ['claude'];
+    const userTargets = extractMentions(options.userMessage.content);
+    const queue: AgentId[] = userTargets.length > 0 ? [...userTargets] : ['claude'];
     const turnsByAgent: Record<AgentId, number> = {
       claude: 0,
       codex: 0,
@@ -194,11 +195,7 @@ export class Orchestrator {
         payload: message,
       });
 
-      let mentions = extractMentions(agentText, agentId);
-
-      if (agentId === 'claude' && totalTurns === 1 && mentions.length === 0) {
-        mentions = defaultDelegatesFor(agentId);
-      }
+      const mentions = extractMentions(agentText, agentId);
 
       for (const target of mentions) {
         const canRun = turnsByAgent[target] < this.config.maxTurnsPerAgent;
