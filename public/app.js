@@ -10,6 +10,10 @@ const newRoomBtn = document.getElementById('new-room-btn');
 let rooms = [];
 let currentRoomId = null;
 let ws = null;
+const typingState = {
+  agentId: null,
+  element: null,
+};
 
 const AGENT_MENTIONS = [
   {
@@ -54,6 +58,74 @@ function roleClass(message) {
   if (message.senderType === 'user') return 'user';
   if (message.senderType === 'system') return 'system';
   return message.agentId || 'system';
+}
+
+function formatAgentName(agentId) {
+  if (agentId === 'claude') return 'Claude 主架构师';
+  if (agentId === 'codex') return 'Codex 审查官';
+  if (agentId === 'gemini') return 'Gemini 设计师';
+  return 'Agent';
+}
+
+function clearTypingBubble() {
+  if (!typingState.element) {
+    typingState.agentId = null;
+    return;
+  }
+
+  typingState.element.remove();
+  typingState.element = null;
+  typingState.agentId = null;
+}
+
+function renderTypingBubble(agentId) {
+  if (!agentId) {
+    return;
+  }
+
+  if (typingState.agentId === agentId && typingState.element) {
+    return;
+  }
+
+  clearTypingBubble();
+
+  const wrapper = document.createElement('article');
+  wrapper.className = 'message typing-message';
+  wrapper.dataset.typingAgent = agentId;
+
+  const head = document.createElement('div');
+  head.className = 'message-head';
+
+  const role = document.createElement('span');
+  role.className = `message-role ${agentId}`;
+  role.textContent = formatAgentName(agentId);
+
+  const time = document.createElement('span');
+  time.textContent = '正在工作...';
+
+  head.appendChild(role);
+  head.appendChild(time);
+
+  const content = document.createElement('div');
+  content.className = 'message-content';
+
+  const dots = document.createElement('span');
+  dots.className = 'typing-dots';
+
+  for (let i = 0; i < 3; i += 1) {
+    const dot = document.createElement('span');
+    dots.appendChild(dot);
+  }
+
+  content.appendChild(dots);
+  wrapper.appendChild(head);
+  wrapper.appendChild(content);
+
+  messageListEl.appendChild(wrapper);
+  messageListEl.scrollTop = messageListEl.scrollHeight;
+
+  typingState.agentId = agentId;
+  typingState.element = wrapper;
 }
 
 function normalizeSearchText(value) {
@@ -199,6 +271,7 @@ function renderRooms() {
 }
 
 function renderMessages(messages) {
+  clearTypingBubble();
   messageListEl.innerHTML = '';
 
   messages.forEach((message) => {
@@ -207,6 +280,10 @@ function renderMessages(messages) {
 }
 
 function appendMessage(message) {
+  if (message.senderType === 'agent' && typingState.agentId === message.agentId) {
+    clearTypingBubble();
+  }
+
   const wrapper = document.createElement('article');
   wrapper.className = 'message';
 
@@ -268,7 +345,20 @@ function attachSocket(roomId) {
 
     if (packet.type === 'status') {
       const phase = packet.payload?.phase || 'unknown';
-      statusTextEl.textContent = `状态：${phase}`;
+      if (phase === 'agent_running' && packet.payload?.agentId) {
+        renderTypingBubble(packet.payload.agentId);
+        statusTextEl.textContent = `状态：${formatAgentName(packet.payload.agentId)} 正在处理`;
+      } else if (phase === 'idle') {
+        clearTypingBubble();
+        statusTextEl.textContent = '状态：空闲';
+      } else if (phase === 'connected') {
+        clearTypingBubble();
+        statusTextEl.textContent = '状态：已连接';
+      } else if (phase === 'running') {
+        statusTextEl.textContent = '状态：正在排队';
+      } else {
+        statusTextEl.textContent = `状态：${phase}`;
+      }
     }
 
     if (packet.type === 'error') {
@@ -283,6 +373,7 @@ function attachSocket(roomId) {
 
 async function openRoom(roomId) {
   currentRoomId = roomId;
+  clearTypingBubble();
   renderRooms();
 
   const room = rooms.find((entry) => entry.id === roomId);

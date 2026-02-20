@@ -1,5 +1,6 @@
 import type { AppConfig } from '../config.js';
 import type { AgentClient, AgentId, ChatMessage, OrchestrationOptions } from '../types.js';
+import { CliRunError } from '../cli/run-cli.js';
 import { RoomStore } from '../storage/store.js';
 import { WsHub } from '../ws-hub.js';
 import { buildAgentPrompt } from './prompt-builder.js';
@@ -17,6 +18,59 @@ function shortError(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function getAgentDisplayName(agentId: AgentId): string {
+  if (agentId === 'claude') {
+    return 'Claude';
+  }
+  if (agentId === 'codex') {
+    return 'Codex';
+  }
+  return 'Gemini';
+}
+
+function firstStderrLine(stderr?: string): string | null {
+  if (!stderr) {
+    return null;
+  }
+
+  const lines = stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return lines[0].slice(0, 120);
+}
+
+function formatAgentFailureMessage(agentId: AgentId, error: unknown): string {
+  const agentName = getAgentDisplayName(agentId);
+
+  if (error instanceof CliRunError) {
+    if (error.kind === 'timeout') {
+      return `${agentName} 暂时没有返回结果。\n下一步：请重试一次；若任务较大，请先让它只给 3 步计划。`;
+    }
+
+    if (error.kind === 'non_zero_exit') {
+      const hint = firstStderrLine(error.stderr);
+      if (hint) {
+        return `${agentName} 当前执行失败（${hint}）。\n下一步：检查账号登录/额度后再重试。`;
+      }
+      return `${agentName} 当前执行失败。\n下一步：检查账号登录/额度后再重试。`;
+    }
+
+    return `${agentName} 当前不可用。\n下一步：请重试；若仍失败，检查本机 ${agentName} 配置。`;
+  }
+
+  const message = shortError(error);
+  if (message) {
+    return `${agentName} 当前执行失败。\n下一步：请重试；若仍失败，检查环境配置。\n原因：${message.slice(0, 120)}`;
+  }
+  return `${agentName} 当前执行失败。\n下一步：请重试；若仍失败，检查环境配置。`;
 }
 
 export class Orchestrator {
@@ -124,7 +178,7 @@ export class Orchestrator {
           this.store.saveAgentSession(options.roomId, agentId, result.sessionId);
         }
       } catch (error) {
-        agentText = `执行失败：${shortError(error)}`;
+        agentText = formatAgentFailureMessage(agentId, error);
       }
 
       const message = this.store.saveMessage({

@@ -1,6 +1,30 @@
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 
+export type CliRunErrorKind = 'timeout' | 'spawn' | 'non_zero_exit';
+
+export class CliRunError extends Error {
+  public readonly kind: CliRunErrorKind;
+  public readonly command: string;
+  public readonly exitCode?: number;
+  public readonly stderr?: string;
+
+  public constructor(input: {
+    kind: CliRunErrorKind;
+    command: string;
+    message: string;
+    exitCode?: number;
+    stderr?: string;
+  }) {
+    super(input.message);
+    this.name = 'CliRunError';
+    this.kind = input.kind;
+    this.command = input.command;
+    this.exitCode = input.exitCode;
+    this.stderr = input.stderr;
+  }
+}
+
 export interface RunCliOptions {
   command: string;
   args: string[];
@@ -63,12 +87,24 @@ export async function runCli(options: RunCliOptions): Promise<RunCliResult> {
 
     const timeout = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new Error(`命令执行超时: ${options.command} ${options.args.join(' ')}`));
+      reject(
+        new CliRunError({
+          kind: 'timeout',
+          command: options.command,
+          message: `${options.command} 调用超时`,
+        }),
+      );
     }, options.timeoutMs);
 
     child.on('error', (error) => {
       clearTimeout(timeout);
-      reject(error);
+      reject(
+        new CliRunError({
+          kind: 'spawn',
+          command: options.command,
+          message: `${options.command} 启动失败: ${error.message}`,
+        }),
+      );
     });
 
     child.on('close', (code) => {
@@ -77,10 +113,15 @@ export async function runCli(options: RunCliOptions): Promise<RunCliResult> {
       stderrReader.close();
 
       if (code !== 0) {
+        const stderr = stderrBuffer.trim() || undefined;
         reject(
-          new Error(
-            `${options.command} 退出码 ${code}。stderr:\n${stderrBuffer || '(empty)'}`,
-          ),
+          new CliRunError({
+            kind: 'non_zero_exit',
+            command: options.command,
+            exitCode: code ?? undefined,
+            stderr,
+            message: `${options.command} 退出异常`,
+          }),
         );
         return;
       }

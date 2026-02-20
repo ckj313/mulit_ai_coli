@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { CliRunError } from '../cli/run-cli.js';
 import type { AppConfig } from '../config.js';
 import type { AgentClient, AgentId, AgentRunInput, AgentRunResult } from '../types.js';
 import { RoomStore } from '../storage/store.js';
@@ -23,6 +24,22 @@ class FakeAgent implements AgentClient {
       rawEvents: [],
       sessionId: `${this.id}-session`,
     };
+  }
+}
+
+class BrokenAgent implements AgentClient {
+  public readonly id: AgentId;
+
+  public constructor(id: AgentId) {
+    this.id = id;
+  }
+
+  public async run(_input: AgentRunInput): Promise<AgentRunResult> {
+    throw new CliRunError({
+      kind: 'timeout',
+      command: 'claude',
+      message: 'claude 调用超时',
+    });
   }
 }
 
@@ -143,5 +160,41 @@ describe('Orchestrator', () => {
       .filter((message) => message.senderType === 'agent');
 
     expect(agentMessages).toHaveLength(5);
+  });
+
+  it('失败消息只给下一步，不暴露完整提示词', async () => {
+    const store = new RoomStore(':memory:');
+    stores.push(store);
+
+    const room = store.createRoom('error sanitize');
+    const userMessage = store.saveMessage({
+      roomId: room.id,
+      senderType: 'user',
+      content: '@claude 给我一句话',
+    });
+
+    const orchestrator = new Orchestrator({
+      config: {
+        ...baseConfig,
+        maxA2ADepth: 1,
+      },
+      store,
+      wsHub: new WsHub(),
+      agents: {
+        claude: new BrokenAgent('claude'),
+        codex: new FakeAgent('codex', ['unused']),
+        gemini: new FakeAgent('gemini', ['unused']),
+      },
+    });
+
+    await orchestrator.runForMessage({ roomId: room.id, userMessage });
+
+    const lastAgentMessage = store
+      .listMessages(room.id)
+      .filter((message) => message.senderType === 'agent')
+      .at(-1);
+
+    expect(lastAgentMessage?.content).toContain('下一步：');
+    expect(lastAgentMessage?.content).not.toContain('房间历史消息如下');
   });
 });
